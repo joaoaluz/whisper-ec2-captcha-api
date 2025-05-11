@@ -1,0 +1,58 @@
+service: whisper-ecr-ec2-api
+
+frameworkVersion: "3"
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+
+resources:
+  Resources:
+    #WhisperTestECR:
+    #  Type: AWS::ECR::Repository
+    #  Properties:
+    #    RepositoryName: whisper-api
+
+    WhisperEc2InstanceT3Micro:
+      Type: AWS::EC2::Instance
+      Properties:
+        InstanceType: t3.small
+        KeyName: whisper-api
+        ImageId: ami-04823729c75214919  # AWS LINUX IMAGE BASE
+        SecurityGroupIds:
+          - !Ref WhisperTestSecurityGroup
+        Tags:
+          - Key: Name
+            Value: ${self:service}-whisper-api-t3-micro
+        UserData: !Base64 |
+          #!/bin/bash
+          sudo yum update -y
+          sudo yum install -y docker
+          sudo service docker start
+          sudo usermod -a -G docker ec2-user
+          
+          sudo docker login -u SEU_DOCKER_USERNAME -p SEU_DOCKER_PASSWORD
+
+          sudo docker pull SEU_DOCKER_USERNAME/whisper-api:v1
+          
+          sudo docker run -it -d -p 80:3000 SEU_DOCKER_USERNAME/whisper-api:v1
+        BlockDeviceMappings:
+          - DeviceName: /dev/xvda
+            Ebs:
+              VolumeSize: 20   
+              VolumeType: gp2  
+              DeleteOnTermination: true 
+
+    WhisperTestSecurityGroup:
+      Type: AWS::EC2::SecurityGroup
+      Properties:
+        GroupDescription: "Allow HTTP access"
+        SecurityGroupIngress:
+          - IpProtocol: tcp
+            FromPort: 80
+            ToPort: 80
+            CidrIp: 0.0.0.0/0  # Permitir acesso HTTP  
+          - IpProtocol: tcp
+            FromPort: 22
+            ToPort: 22
+            CidrIp: 0.0.0.0/0  # Permitir tráfego SSH de qualquer lugar (para acesso via SSH)  
